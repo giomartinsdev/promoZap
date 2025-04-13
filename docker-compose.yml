@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Redis - Broker de mensagens simples
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - promozap-network
+    command: redis-server --appendonly yes
+
+  # Serviço Node.js para processamento de mensagens
+  nodejs-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: promozap-nodejs
+    depends_on:
+      - redis
+    environment:
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./src:/app/src
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+      - ./tsconfig.json:/app/tsconfig.json
+    networks:
+      - promozap-network
+    command: npm run dev
+
+  # Serviço Python para o agente de IA
+  python-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: promozap-python
+    depends_on:
+      - redis
+    environment:
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./src/ai_agent:/app/src/ai_agent
+    networks:
+      - promozap-network
+    command: python /app/src/ai_agent/message_classifier.py
+
+networks:
+  promozap-network:
+    driver: bridge
+
+volumes:
+  redis-data:
